@@ -61,7 +61,7 @@ api.interceptors.response.use(
         // Ignore storage errors
       }
       // Notify the app to redirect to login (avoids circular import of router here)
-      if (typeof window !== 'undefined' && window.dispatchEvent) {
+      if (typeof window !== 'undefined' && window.dispatchEvent && typeof Event !== 'undefined') {
         window.dispatchEvent(new Event('auth:logout'));
       }
     }

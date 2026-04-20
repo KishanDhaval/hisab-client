@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Contacts from 'expo-contacts';
 import { router, useFocusEffect } from 'expo-router';
 import { customersAPI } from '../../../services/api';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../constants/theme';
@@ -32,6 +33,13 @@ export default function CustomersListScreen() {
   const [newPhone, setNewPhone] = useState('');
   const [errors, setErrors] = useState({});
   const [creating, setCreating] = useState(false);
+
+  // Contacts integration
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [allContacts, setAllContacts] = useState([]);
+  const [filteredContacts, setFilteredContacts] = useState([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [searchingContacts, setSearchingContacts] = useState(false);
 
   // Validate on input change
   useEffect(() => {
@@ -102,6 +110,68 @@ export default function CustomersListScreen() {
     } finally {
       setCreating(false);
     }
+  };
+
+  // ─── Contact Import Logic ────────────────────────────────────
+  const openContactPicker = async () => {
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'We need access to your contacts to import them. Please enable it in settings.'
+      );
+      return;
+    }
+
+    setShowContactPicker(true);
+    setSearchingContacts(true);
+    try {
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+      });
+
+      // Filter contacts that have at least one phone number
+      const validContacts = data.filter(c => c.phoneNumbers && c.phoneNumbers.length > 0);
+      setAllContacts(validContacts);
+      setFilteredContacts(validContacts);
+    } catch (err) {
+      console.error('Fetch contacts error:', err);
+      Alert.alert('Error', 'Failed to load contacts.');
+    } finally {
+      setSearchingContacts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contactSearch.trim() === '') {
+      setFilteredContacts(allContacts);
+    } else {
+      const filtered = allContacts.filter(c => 
+        c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+        c.phoneNumbers.some(p => p.number.includes(contactSearch))
+      );
+      setFilteredContacts(filtered);
+    }
+  }, [contactSearch, allContacts]);
+
+  const handleSelectContact = (contact) => {
+    // Pick the first phone number
+    let phone = contact.phoneNumbers[0].number;
+    
+    // Clean phone number: remove spaces, dashes, parentheses, and +91 prefix
+    phone = phone.replace(/[\s\-\(\)\+]/g, '');
+    if (phone.startsWith('91') && phone.length > 10) {
+      phone = phone.substring(2);
+    }
+    // If it's still > 10 digits and starts with 0, remove 0
+    if (phone.startsWith('0') && phone.length > 10) {
+      phone = phone.substring(1);
+    }
+
+    setNewName(contact.name);
+    setNewPhone(phone);
+    setShowContactPicker(false);
+    setContactSearch('');
   };
 
   const isFormValid = newName.trim().length >= 2 && /^\d{10,15}$/.test(newPhone);
@@ -236,8 +306,73 @@ export default function CustomersListScreen() {
                 <Text style={styles.modalBtnText}>Create Customer</Text>
               )}
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.importBtn} 
+              onPress={openContactPicker}
+            >
+              <Ionicons name="people-outline" size={20} color={Colors.primary} />
+              <Text style={styles.importBtnText}>Import from Contacts</Text>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ─── Contact Picker Modal ─────────────────────────────── */}
+      <Modal
+        visible={showContactPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowContactPicker(false)}
+      >
+        <View style={styles.contactPickerOverlay}>
+          <View style={styles.contactPickerContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Contact</Text>
+              <TouchableOpacity onPress={() => setShowContactPicker(false)}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.contactSearchBox}>
+              <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.contactSearchInput}
+                placeholder="Search phone contacts..."
+                value={contactSearch}
+                onChangeText={setContactSearch}
+                autoFocus
+              />
+            </View>
+
+            {searchingContacts ? (
+              <ActivityIndicator color={Colors.primary} style={{ margin: 40 }} />
+            ) : (
+              <FlatList
+                data={filteredContacts}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.contactItem}
+                    onPress={() => handleSelectContact(item)}
+                  >
+                    <View style={styles.contactAvatar}>
+                      <Text style={styles.contactAvatarText}>{item.name[0]}</Text>
+                    </View>
+                    <View style={styles.contactInfo}>
+                      <Text style={styles.contactName}>{item.name}</Text>
+                      <Text style={styles.contactPhone}>{item.phoneNumbers[0].number}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                ListEmptyComponent={
+                  <Text style={styles.emptyTextMinor}>No contacts found</Text>
+                }
+              />
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -424,4 +559,71 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
+  importBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  importBtnText: {
+    color: Colors.primary,
+    fontSize: Fonts.sizes.base,
+    fontWeight: '700',
+  },
+
+  // Contact Picker
+  contactPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'flex-end',
+  },
+  contactPickerContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    height: '80%',
+    padding: Spacing.xl,
+  },
+  contactSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  contactSearchInput: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    fontSize: Fonts.sizes.base,
+    color: Colors.text,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  contactAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primaryGhost,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  contactAvatarText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  contactInfo: { flex: 1 },
+  contactName: { fontSize: Fonts.sizes.base, fontWeight: '600', color: Colors.text },
+  contactPhone: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 2 },
+  emptyTextMinor: { textAlign: 'center', color: Colors.textMuted, marginTop: 40 },
 });
