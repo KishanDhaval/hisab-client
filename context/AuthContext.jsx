@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
 
   // ─── Handle token expiry from API interceptor ─────────────
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !window.addEventListener) return;
     const handleForceLogout = async () => {
       setToken(null);
       setUser(null);

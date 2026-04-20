@@ -18,6 +18,7 @@ import { Colors, Fonts, Spacing, Radius, Shadows } from '../../constants/theme';
 export default function DashboardScreen() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
+  const [recentTransactions, setRecentTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -25,8 +26,12 @@ export default function DashboardScreen() {
   const fetchDashboard = useCallback(async () => {
     try {
       setError(null);
-      const { data: result } = await transactionsAPI.dashboard();
-      setData(result);
+      const [dashRes, txnRes] = await Promise.all([
+        transactionsAPI.dashboard(),
+        transactionsAPI.list({ limit: 5 })
+      ]);
+      setData(dashRes.data);
+      setRecentTransactions(txnRes.data.transactions);
     } catch (error) {
       console.error('Dashboard fetch error:', error);
       setError('Failed to load dashboard data. Tap to retry.');
@@ -39,7 +44,6 @@ export default function DashboardScreen() {
   // Re-fetch every time user navigates to dashboard tab
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
       fetchDashboard();
     }, [fetchDashboard])
   );
@@ -80,13 +84,45 @@ export default function DashboardScreen() {
     },
   ];
 
+  const renderRecentTxn = (txn) => {
+    const itemSummary = txn.items?.length > 0 
+      ? txn.items.slice(0, 2).map(i => i.name).join(', ') + (txn.items.length > 2 ? ` +${txn.items.length - 2}` : '')
+      : 'Payment Received';
+
+    return (
+      <TouchableOpacity 
+        key={txn._id} 
+        style={styles.recentTxn}
+        onPress={() => router.push(`/(app)/customers/${txn.customer?._id}`)}
+      >
+        <View style={[styles.txnIcon, { backgroundColor: txn.type === 'CREDIT' ? Colors.creditBg : Colors.debitBg }]}>
+          <Ionicons 
+            name={txn.type === 'CREDIT' ? 'arrow-up' : 'arrow-down'} 
+            size={16} 
+            color={txn.type === 'CREDIT' ? Colors.credit : Colors.debit} 
+          />
+        </View>
+        <View style={styles.txnInfo}>
+          <Text style={styles.txnCustomer}>{txn.customer?.name}</Text>
+          <Text style={styles.txnItems} numberOfLines={1}>{itemSummary}</Text>
+        </View>
+        <View style={styles.txnEnd}>
+          <Text style={[styles.txnAmount, { color: txn.type === 'CREDIT' ? Colors.credit : Colors.debit }]}>
+            {txn.type === 'CREDIT' ? '+' : '-'}{formatCurrency(txn.totalAmount)}
+          </Text>
+          <Text style={styles.txnTime}>{new Date(txn.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
-        {loading ? (
+        {loading && !refreshing ? (
           <ActivityIndicator size="large" color={Colors.primary} style={styles.loader} />
         ) : error ? (
           <TouchableOpacity style={styles.errorContainer} onPress={() => { setLoading(true); fetchDashboard(); }}>
@@ -136,7 +172,7 @@ export default function DashboardScreen() {
                 <View style={[styles.actionIcon, { backgroundColor: Colors.debitBg }]}>
                   <Ionicons name="person-add-outline" size={28} color={Colors.debit} />
                 </View>
-                <Text style={styles.actionLabel}>Add Customer</Text>
+                <Text style={styles.actionLabel}>Customers</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionBtn}
@@ -148,6 +184,22 @@ export default function DashboardScreen() {
                 <Text style={styles.actionLabel}>History</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Recent Activity */}
+            <View style={styles.recentHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => router.push('/(app)/transactions/history')}>
+                <Text style={styles.seeAllText}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.recentActivity}>
+              {recentTransactions.length > 0 ? (
+                recentTransactions.map(renderRecentTxn)
+              ) : (
+                <Text style={styles.emptyText}>No recent activity</Text>
+              )}
+            </View>
+            <View style={{ height: Spacing.xl }} />
           </>
         )}
       </ScrollView>
@@ -268,5 +320,68 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.sm,
     fontWeight: '600',
     color: Colors.textSecondary,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.md,
+  },
+  seeAllText: {
+    color: Colors.primary,
+    fontSize: Fonts.sizes.sm,
+    fontWeight: '700',
+  },
+  recentActivity: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.sm,
+    ...Shadows.card,
+  },
+  recentTxn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  txnIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.md,
+  },
+  txnInfo: {
+    flex: 1,
+  },
+  txnCustomer: {
+    color: Colors.text,
+    fontWeight: '700',
+    fontSize: Fonts.sizes.md,
+  },
+  txnItems: {
+    color: Colors.textSecondary,
+    fontSize: Fonts.sizes.xs,
+    marginTop: 2,
+  },
+  txnEnd: {
+    alignItems: 'flex-end',
+  },
+  txnAmount: {
+    fontWeight: '800',
+    fontSize: Fonts.sizes.sm,
+  },
+  txnTime: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: Colors.textMuted,
+    paddingVertical: Spacing.lg,
   },
 });

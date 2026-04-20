@@ -2,19 +2,24 @@ import axios from 'axios';
 import { storage } from '../utils/storage';
 import { Platform } from 'react-native';
 
+import Constants from 'expo-constants';
+
 /**
  * API Base URL — adapts per platform:
  *  - Web browser:      localhost:5000
- *  - Android emulator: 10.0.2.2:5000  (emulator's alias for host machine)
- *  - iOS simulator:    localhost:5000
- *  - Physical device:  Replace with your machine's LAN IP (e.g. 192.168.x.x:5000)
+ *  - Mobile (Dev):     Auto-detects host machine LAN IP (via Expo Constants)
+ *  - Mobile (Prod):    Production URL
  */
 const getBaseUrl = () => {
   if (!__DEV__) return 'https://your-production-api.com/api';
 
   if (Platform.OS === 'web') return 'http://localhost:5000/api';
-  if (Platform.OS === 'android') return 'http://10.0.2.2:5000/api';
-  return 'http://localhost:5000/api'; // iOS simulator
+
+  // For physical devices and emulators, we use the IP of the machine running the Expo server
+  const debuggerHost = Constants.expoConfig?.hostUri;
+  const localhost = debuggerHost?.split(':')[0] || 'localhost';
+
+  return `http://${localhost}:5000/api`;
 };
 
 const API_BASE_URL = getBaseUrl();
@@ -56,7 +61,7 @@ api.interceptors.response.use(
         // Ignore storage errors
       }
       // Notify the app to redirect to login (avoids circular import of router here)
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
         window.dispatchEvent(new Event('auth:logout'));
       }
     }

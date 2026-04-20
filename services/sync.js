@@ -26,7 +26,7 @@ export const syncService = {
   startListening: () => {
     if (!NetInfo) {
       // On web, we use online/offline events instead
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.addEventListener) {
         const handler = () => syncService.syncPendingRequests();
         window.addEventListener('online', handler);
         return () => window.removeEventListener('online', handler);

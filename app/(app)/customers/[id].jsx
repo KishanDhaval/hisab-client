@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -26,18 +26,39 @@ export default function CustomerDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', phone: '' });
 
+  const groupTransactionsByDate = (txns) => {
+    const groups = txns.reduce((acc, txn) => {
+      const date = new Date(txn.date);
+      const title = date.toLocaleDateString('en-IN', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+      if (!acc[title]) acc[title] = [];
+      acc[title].push(txn);
+      return acc;
+    }, {});
+
+    return Object.keys(groups)
+      .sort((a, b) => new Date(b) - new Date(a))
+      .map(date => ({
+        title: date,
+        data: groups[date]
+      }));
+  };
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const [custRes, txnRes, balRes] = await Promise.all([
         customersAPI.get(id),
-        transactionsAPI.list({ customerId: id, limit: 50 }),
+        transactionsAPI.list({ customerId: id, limit: 100 }),
         customersAPI.balance(id),
       ]);
       setCustomer(custRes.data.customer);
       setEditForm({ name: custRes.data.customer.name, phone: custRes.data.customer.phone });
-      setTransactions(txnRes.data.transactions);
+      setTransactions(groupTransactionsByDate(txnRes.data.transactions));
       setBalance(balRes.data.outstanding);
     } catch (err) {
       console.error('Customer detail error:', err);
@@ -139,33 +160,47 @@ export default function CustomerDetailScreen() {
     );
   };
 
-  const renderTransaction = ({ item }) => (
-    <View style={styles.txnCard}>
-      <View style={[styles.txnBadge, { backgroundColor: item.type === 'CREDIT' ? Colors.creditBg : Colors.debitBg }]}>
-        <Ionicons
-          name={item.type === 'CREDIT' ? 'arrow-up' : 'arrow-down'}
-          size={18}
-          color={item.type === 'CREDIT' ? Colors.credit : Colors.debit}
-        />
-      </View>
-      <View style={styles.txnInfo}>
-        <Text style={styles.txnType}>
-          {item.type === 'CREDIT' ? 'Credit (Udhaar)' : 'Payment Received'}
+  const renderTransaction = ({ item }) => {
+    const itemSummary = item.items?.length > 0 
+      ? item.items.slice(0, 2).map(i => i.name).join(', ') + (item.items.length > 2 ? ` +${item.items.length - 2} more` : '')
+      : 'Payment Received';
+
+    return (
+      <View style={styles.txnCard}>
+        <View style={[styles.txnBadge, { backgroundColor: item.type === 'CREDIT' ? Colors.creditBg : Colors.debitBg }]}>
+          <Ionicons
+            name={item.type === 'CREDIT' ? 'arrow-up' : 'arrow-down'}
+            size={18}
+            color={item.type === 'CREDIT' ? Colors.credit : Colors.debit}
+          />
+        </View>
+        <View style={styles.txnInfo}>
+          <Text style={styles.txnType}>{itemSummary}</Text>
+          <Text style={styles.txnTime}>
+            {new Date(item.date).toLocaleTimeString('en-IN', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Text>
+          {item.note ? <Text style={styles.txnNote}>{item.note}</Text> : null}
+        </View>
+        <Text style={[styles.txnAmount, { color: item.type === 'CREDIT' ? Colors.credit : Colors.debit }]}>
+          {item.type === 'CREDIT' ? '+' : '-'}{formatCurrency(item.totalAmount)}
         </Text>
-        <Text style={styles.txnDate}>
-          {new Date(item.date).toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </Text>
-        {item.note ? <Text style={styles.txnNote}>{item.note}</Text> : null}
       </View>
-      <Text style={[styles.txnAmount, { color: item.type === 'CREDIT' ? Colors.credit : Colors.debit }]}>
-        {item.type === 'CREDIT' ? '+' : '-'}{formatCurrency(item.totalAmount)}
-      </Text>
-    </View>
-  );
+    );
+  };
+
+  const renderSectionHeader = ({ section: { title } }) => {
+    const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const isToday = title === today;
+
+    return (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeaderText}>{isToday ? 'Today' : title}</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -218,50 +253,56 @@ export default function CustomerDetailScreen() {
         )}
       </View>
 
-      {/* Balance Card */}
-      <View style={styles.balanceCard}>
-        <View style={styles.balanceHeader}>
-          <Text style={styles.balanceLabel}>Outstanding Balance</Text>
-          {balance > 0 && (
-            <TouchableOpacity style={styles.settleBadge} onPress={handleSettle}>
-              <Ionicons name="checkmark-done" size={16} color={Colors.white} />
-              <Text style={styles.settleText}>Settle</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <Text style={[styles.balanceValue, { color: balance > 0 ? Colors.credit : Colors.debit }]}>
-          {formatCurrency(Math.abs(balance))}
-        </Text>
-        <Text style={styles.balanceSub}>
-          {balance > 0 ? 'Customer owes you' : balance < 0 ? 'You owe customer' : 'All settled'}
-        </Text>
-      </View>
-
-      {/* Action Buttons */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: Colors.creditBg }]}
-          onPress={() => router.push({ pathname: '/(app)/transactions/add', params: { customerId: id, type: 'CREDIT' } })}
-        >
-          <Ionicons name="add-circle" size={20} color={Colors.credit} />
-          <Text style={[styles.actionText, { color: Colors.credit }]}>Add Credit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: Colors.debitBg }]}
-          onPress={() => router.push({ pathname: '/(app)/transactions/add', params: { customerId: id, type: 'DEBIT' } })}
-        >
-          <Ionicons name="cash" size={20} color={Colors.debit} />
-          <Text style={[styles.actionText, { color: Colors.debit }]}>Record Payment</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Transaction History */}
-      <Text style={styles.sectionTitle}>Recent Transactions</Text>
-      <FlatList
-        data={transactions}
+      <SectionList
+        sections={transactions}
         renderItem={renderTransaction}
+        renderSectionHeader={renderSectionHeader}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.txnList}
+        stickySectionHeadersEnabled={true}
+        ListHeaderComponent={
+          <>
+            {/* Balance Card */}
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceHeader}>
+                <Text style={styles.balanceLabel}>Outstanding Balance</Text>
+                {balance > 0 && (
+                  <TouchableOpacity style={styles.settleBadge} onPress={handleSettle}>
+                    <Ionicons name="checkmark-done" size={16} color={Colors.white} />
+                    <Text style={styles.settleText}>Settle</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={[styles.balanceValue, { color: balance > 0 ? Colors.credit : Colors.debit }]}>
+                {formatCurrency(Math.abs(balance))}
+              </Text>
+              <Text style={styles.balanceSub}>
+                {balance > 0 ? 'Customer owes you' : balance < 0 ? 'You owe customer' : 'All settled'}
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: Colors.creditBg }]}
+                onPress={() => router.push({ pathname: '/(app)/transactions/add', params: { customerId: id, type: 'CREDIT' } })}
+              >
+                <Ionicons name="add-circle" size={20} color={Colors.credit} />
+                <Text style={[styles.actionText, { color: Colors.credit }]}>Add Credit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: Colors.debitBg }]}
+                onPress={() => router.push({ pathname: '/(app)/transactions/add', params: { customerId: id, type: 'DEBIT' } })}
+              >
+                <Ionicons name="cash" size={20} color={Colors.debit} />
+                <Text style={[styles.actionText, { color: Colors.debit }]}>Record Payment</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Transaction History Title */}
+            <Text style={styles.sectionTitle}>Full History</Text>
+          </>
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No transactions yet</Text>
@@ -392,9 +433,21 @@ const styles = StyleSheet.create({
   },
   txnInfo: { flex: 1, marginLeft: Spacing.md },
   txnType: { fontSize: Fonts.sizes.md, fontWeight: '600', color: Colors.text },
-  txnDate: { fontSize: Fonts.sizes.xs, color: Colors.textMuted, marginTop: 2 },
+  txnTime: { fontSize: Spacing.md, color: Colors.textMuted, marginTop: 2 },
   txnNote: { fontSize: Fonts.sizes.xs, color: Colors.textSecondary, marginTop: 2, fontStyle: 'italic' },
   txnAmount: { fontSize: Fonts.sizes.base, fontWeight: '800' },
+  sectionHeader: {
+    backgroundColor: Colors.background,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  sectionHeaderText: {
+    fontSize: Fonts.sizes.sm,
+    fontWeight: '700',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   empty: { alignItems: 'center', marginTop: Spacing.xxxl },
   emptyText: { fontSize: Fonts.sizes.md, color: Colors.textMuted },
 });

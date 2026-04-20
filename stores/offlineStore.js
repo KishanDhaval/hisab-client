@@ -1,6 +1,6 @@
 import { storage } from '../utils/storage';
 
-const OFFLINE_QUEUE_KEY = '@hisab_offline_queue';
+const OFFLINE_QUEUE_KEY = 'hisab_offline_queue';
 
 /**
  * Offline-first store.

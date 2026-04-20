@@ -246,19 +246,23 @@ export default function AddTransactionScreen() {
 
     return (
       <View style={styles.stepContent}>
-        <Text style={styles.sectionTitle}>Select Customer</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name or phone..."
-          placeholderTextColor={Colors.textMuted}
-          value={customerSearch}
-          onChangeText={setCustomerSearch}
-        />
-        
         <FlatList
           data={filtered}
           keyExtractor={item => item._id}
           style={styles.customerList}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <>
+              <Text style={styles.sectionTitle}>Select Customer</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by name or phone..."
+                placeholderTextColor={Colors.textMuted}
+                value={customerSearch}
+                onChangeText={setCustomerSearch}
+              />
+            </>
+          }
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={[styles.customerCard, selectedCustomer?._id === item._id && styles.customerCardActive]}
@@ -274,33 +278,37 @@ export default function AddTransactionScreen() {
               {selectedCustomer?._id === item._id && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
             </TouchableOpacity>
           )}
+          ListFooterComponent={
+            <>
+              <Text style={styles.sectionTitle}>Transaction Type</Text>
+              <View style={styles.typeToggle}>
+                <TouchableOpacity 
+                  style={[styles.typeBtn, type === 'CREDIT' && styles.typeBtnActiveCredit]}
+                  onPress={() => setType('CREDIT')}
+                >
+                  <Ionicons name="arrow-up-circle" size={20} color={type === 'CREDIT' ? Colors.white : Colors.credit} />
+                  <Text style={[styles.typeText, type === 'CREDIT' && styles.typeTextActive]}>Credit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.typeBtn, type === 'DEBIT' && styles.typeBtnActiveDebit]}
+                  onPress={() => setType('DEBIT')}
+                >
+                  <Ionicons name="cash" size={20} color={type === 'DEBIT' ? Colors.white : Colors.debit} />
+                  <Text style={[styles.typeText, type === 'DEBIT' && styles.typeTextActive]}>Payment</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.mainBtn} onPress={handleNext}>
+                <Text style={styles.mainBtnText}>Next Step</Text>
+                <Ionicons name="arrow-forward" size={20} color={Colors.white} />
+              </TouchableOpacity>
+              <View style={{ height: 40 }} />
+            </>
+          }
           ListEmptyComponent={
             <Text style={styles.emptyText}>No customers found</Text>
           }
         />
-
-        <Text style={styles.sectionTitle}>Transaction Type</Text>
-        <View style={styles.typeToggle}>
-          <TouchableOpacity 
-            style={[styles.typeBtn, type === 'CREDIT' && styles.typeBtnActiveCredit]}
-            onPress={() => setType('CREDIT')}
-          >
-            <Ionicons name="arrow-up-circle" size={20} color={type === 'CREDIT' ? Colors.white : Colors.credit} />
-            <Text style={[styles.typeText, type === 'CREDIT' && styles.typeTextActive]}>Credit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.typeBtn, type === 'DEBIT' && styles.typeBtnActiveDebit]}
-            onPress={() => setType('DEBIT')}
-          >
-            <Ionicons name="cash" size={20} color={type === 'DEBIT' ? Colors.white : Colors.debit} />
-            <Text style={[styles.typeText, type === 'DEBIT' && styles.typeTextActive]}>Payment</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.mainBtn} onPress={handleNext}>
-          <Text style={styles.mainBtnText}>Next Step</Text>
-          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
-        </TouchableOpacity>
       </View>
     );
   };

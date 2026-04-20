@@ -3,13 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { transactionsAPI } from '../../../services/api';
 import { formatCurrency } from '../../../utils/currency';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../constants/theme';
@@ -22,8 +24,12 @@ const PERIODS = [
 ];
 
 export default function TransactionHistoryScreen() {
-  const [transactions, setTransactions] = useState([]);
+  const [sections, setSections] = useState([]);
   const [period, setPeriod] = useState('all');
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [showPicker, setShowPicker] = useState(null); // 'start' or 'end'
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
@@ -31,20 +37,47 @@ export default function TransactionHistoryScreen() {
   const [error, setError] = useState(null);
   const [expandedTxn, setExpandedTxn] = useState(null);
 
+  const groupTransactionsByDate = (txns) => {
+    const groups = txns.reduce((acc, txn) => {
+      const date = new Date(txn.date);
+      const title = date.toLocaleDateString('en-IN', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+      if (!acc[title]) acc[title] = [];
+      acc[title].push(txn);
+      return acc;
+    }, {});
+
+    return Object.keys(groups)
+      .sort((a, b) => new Date(b) - new Date(a)) // Ensure chronological order
+      .map(date => ({
+        title: date,
+        data: groups[date]
+      }));
+  };
+
   const fetchTransactions = useCallback(
     async (pageNum = 1, append = false) => {
       try {
         const params = { page: pageNum, limit: 20 };
-        if (period !== 'all') params.period = period;
+        
+        if (startDate && endDate) {
+          params.startDate = startDate.toISOString();
+          params.endDate = endDate.toISOString();
+        } else if (period !== 'all') {
+          params.period = period;
+        }
 
         setError(null);
         const { data } = await transactionsAPI.list(params);
 
-        if (append) {
-          setTransactions((prev) => [...prev, ...data.transactions]);
-        } else {
-          setTransactions(data.transactions);
-        }
+        const newTxns = append 
+          ? [...sections.flatMap(s => s.data), ...data.transactions]
+          : data.transactions;
+        
+        setSections(groupTransactionsByDate(newTxns));
         setHasMore(pageNum < data.pagination.pages);
       } catch (err) {
         console.error('Fetch transactions error:', err);
@@ -54,17 +87,34 @@ export default function TransactionHistoryScreen() {
         setRefreshing(false);
       }
     },
-    [period]
+    [period, startDate, endDate, sections]
   );
 
-  // Re-fetch on screen focus and period change
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      setPage(1);
-      fetchTransactions(1);
-    }, [fetchTransactions])
-  );
+  // Re-fetch on filters change
+  useEffect(() => {
+    setLoading(true);
+    setPage(1);
+    fetchTransactions(1);
+  }, [period, startDate, endDate]);
+
+  const onDateChange = (event, selectedDate) => {
+    setShowPicker(null);
+    if (!selectedDate) return;
+
+    if (showPicker === 'start') {
+      setStartDate(selectedDate);
+      if (endDate && selectedDate > endDate) setEndDate(selectedDate);
+    } else {
+      setEndDate(selectedDate);
+      if (startDate && selectedDate < startDate) setStartDate(selectedDate);
+    }
+  };
+
+  const resetDates = () => {
+    setStartDate(null);
+    setEndDate(null);
+    setPeriod('all');
+  };
 
   const loadMore = () => {
     if (!hasMore || loading) return;
@@ -79,6 +129,9 @@ export default function TransactionHistoryScreen() {
 
   const renderTransaction = ({ item }) => {
     const isExpanded = expandedTxn === item._id;
+    const itemSummary = item.items?.length > 0 
+      ? item.items.slice(0, 2).map(i => i.name).join(', ') + (item.items.length > 2 ? ` +${item.items.length - 2} more` : '')
+      : 'Payment Received';
 
     return (
       <TouchableOpacity
@@ -100,16 +153,14 @@ export default function TransactionHistoryScreen() {
             />
           </View>
           <View style={styles.txnInfo}>
-            <Text style={styles.txnCustomer}>{item.customer?.name || 'Unknown'}</Text>
-            <Text style={styles.txnType}>
-              {item.type === 'CREDIT'
-                ? `${item.items?.length || 0} items`
-                : 'Payment received'}
+            <TouchableOpacity onPress={() => router.push(`/(app)/customers/${item.customer?._id}`)}>
+              <Text style={styles.txnCustomer}>{item.customer?.name || 'Unknown'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.txnItemsLine} numberOfLines={1}>
+              {itemSummary}
             </Text>
-            <Text style={styles.txnDate}>
-              {new Date(item.date).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
+            <Text style={styles.txnTime}>
+              {new Date(item.date).toLocaleTimeString('en-IN', {
                 hour: '2-digit',
                 minute: '2-digit',
               })}
@@ -145,12 +196,20 @@ export default function TransactionHistoryScreen() {
                 <Text style={{ fontWeight: '600' }}>Note:</Text> {item.note}
               </Text>
             ) : null}
-            {(!item.items || item.items.length === 0) && !item.note && (
-              <Text style={styles.txnNoteText}>No additional details.</Text>
-            )}
           </View>
         )}
       </TouchableOpacity>
+    );
+  };
+
+  const renderSectionHeader = ({ section: { title } }) => {
+    const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const isToday = title === today;
+
+    return (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeaderText}>{isToday ? 'Today' : title}</Text>
+      </View>
     );
   };
 
@@ -166,15 +225,56 @@ export default function TransactionHistoryScreen() {
         {PERIODS.map((p) => (
           <TouchableOpacity
             key={p.key}
-            style={[styles.filterChip, period === p.key && styles.filterChipActive]}
-            onPress={() => setPeriod(p.key)}
+            style={[styles.filterChip, period === p.key && !startDate && styles.filterChipActive]}
+            onPress={() => { setPeriod(p.key); setStartDate(null); setEndDate(null); }}
           >
-            <Text style={[styles.filterText, period === p.key && styles.filterTextActive]}>
+            <Text style={[styles.filterText, period === p.key && !startDate && styles.filterTextActive]}>
               {p.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Custom Date Range */}
+      <View style={styles.dateFilterContainer}>
+        <TouchableOpacity 
+          style={[styles.datePickerBtn, startDate && styles.datePickerBtnActive]} 
+          onPress={() => setShowPicker('start')}
+        >
+          <Ionicons name="calendar-outline" size={16} color={startDate ? Colors.white : Colors.textSecondary} />
+          <Text style={[styles.datePickerText, startDate && styles.datePickerTextActive]}>
+            {startDate ? startDate.toLocaleDateString('en-IN') : 'Start Date'}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.dateRangeSeparator}>→</Text>
+
+        <TouchableOpacity 
+          style={[styles.datePickerBtn, endDate && styles.datePickerBtnActive]} 
+          onPress={() => setShowPicker('end')}
+        >
+          <Ionicons name="calendar-outline" size={16} color={endDate ? Colors.white : Colors.textSecondary} />
+          <Text style={[styles.datePickerText, endDate && styles.datePickerTextActive]}>
+            {endDate ? endDate.toLocaleDateString('en-IN') : 'End Date'}
+          </Text>
+        </TouchableOpacity>
+
+        {(startDate || endDate) && (
+          <TouchableOpacity style={styles.clearDateBtn} onPress={resetDates}>
+            <Ionicons name="close-circle" size={20} color={Colors.danger} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showPicker && (
+        <DateTimePicker
+          value={showPicker === 'start' ? (startDate || new Date()) : (endDate || new Date())}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+          maximumDate={new Date()}
+        />
+      )}
 
       {/* List */}
       {loading && page === 1 ? (
@@ -185,11 +285,13 @@ export default function TransactionHistoryScreen() {
           <Text style={styles.errorText}>{error}</Text>
         </TouchableOpacity>
       ) : (
-        <FlatList
-          data={transactions}
+        <SectionList
+          sections={sections}
           renderItem={renderTransaction}
+          renderSectionHeader={renderSectionHeader}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -247,6 +349,46 @@ const styles = StyleSheet.create({
   },
   filterText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, fontWeight: '600' },
   filterTextActive: { color: Colors.white },
+  
+  dateFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  datePickerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 6,
+  },
+  datePickerBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  datePickerText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  datePickerTextActive: {
+    color: Colors.white,
+  },
+  dateRangeSeparator: {
+    color: Colors.textMuted,
+    fontWeight: '700',
+  },
+  clearDateBtn: {
+    padding: 4,
+  },
+
   loader: { marginTop: Spacing.xxxl },
   errorContainer: {
     alignItems: 'center',
@@ -284,9 +426,22 @@ const styles = StyleSheet.create({
   },
   txnInfo: { flex: 1, marginLeft: Spacing.md },
   txnCustomer: { fontSize: Fonts.sizes.base, fontWeight: '700', color: Colors.text },
-  txnType: { fontSize: Fonts.sizes.xs, color: Colors.textSecondary, marginTop: 1 },
-  txnDate: { fontSize: Fonts.sizes.xs, color: Colors.textMuted, marginTop: 2 },
+  txnItemsLine: { fontSize: Fonts.sizes.xs, color: Colors.textSecondary, marginTop: 1, marginBottom: 2 },
+  txnTime: { fontSize: Fonts.sizes.xs, color: Colors.textMuted },
   txnAmount: { fontSize: Fonts.sizes.base, fontWeight: '800' },
+  sectionHeader: {
+    backgroundColor: Colors.background,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  sectionHeaderText: {
+    fontSize: Fonts.sizes.sm,
+    fontWeight: '700',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   txnDetails: {
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
