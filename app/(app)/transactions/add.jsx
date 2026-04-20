@@ -279,7 +279,13 @@ export default function AddTransactionScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={[styles.customerCard, selectedCustomer?._id === item._id && styles.customerCardActive]}
-              onPress={() => setSelectedCustomer(item)}
+              onPress={() => {
+                if (selectedCustomer?._id !== item._id) {
+                  setLineItems([]);
+                  setPaymentAmount('');
+                }
+                setSelectedCustomer(item);
+              }}
             >
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{item.name[0].toUpperCase()}</Text>
@@ -510,7 +516,11 @@ export default function AddTransactionScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.mainHeader}>
-        <TouchableOpacity onPress={() => step > 1 ? transitionTo(step - 1) : router.back()}>
+        <TouchableOpacity 
+          onPress={() => {
+            step > 1 ? transitionTo(step - 1) : router.back();
+          }}
+        >
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.mainTitle}>{step === 1 ? 'New Entry' : step === 2 ? 'Details' : 'Success'}</Text>
