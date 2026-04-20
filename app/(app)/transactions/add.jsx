@@ -221,6 +221,19 @@ export default function AddTransactionScreen() {
     transitionTo(2);
   };
 
+  const fullReset = () => {
+    // Reset everything for next time
+    setStep(1);
+    setSelectedCustomer(null);
+    setLineItems([]);
+    setPaymentAmount('');
+    setNote('');
+    setHistory([]);
+    setCustomerSearch('');
+    setItemSearch('');
+    // Note: we don't call router.back() here directly if we want to handle it in the UI
+  };
+
   // ─── Sub-Components ──────────────────────────────────────────────────
 
   const StepIndicator = () => (
@@ -481,7 +494,13 @@ export default function AddTransactionScreen() {
           <Ionicons name="add" size={24} color={Colors.primary} />
           <Text style={styles.addMoreFinalText}>Add Another</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+        <TouchableOpacity 
+          style={styles.doneBtn} 
+          onPress={() => {
+            fullReset();
+            router.back();
+          }}
+        >
           <Text style={styles.doneBtnText}>Done</Text>
         </TouchableOpacity>
       </View>
