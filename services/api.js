@@ -113,4 +113,22 @@ export const portalAPI = {
   history: (params) => api.get('/portal/history', { params }),
 };
 
+// Upload
+export const uploadAPI = {
+  image: async (uri) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop();
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : `image`;
+
+    formData.append('image', { uri, name: filename, type });
+
+    return api.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+};
+
 export default api;

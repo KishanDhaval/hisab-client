@@ -17,6 +17,7 @@
     "expo": "~55.0.15",
     "expo-constants": "~55.0.12",
     "expo-contacts": "~55.0.12",
+    "expo-image-picker": "~55.0.19",
     "expo-linking": "~55.0.11",
     "expo-modules-core": "~55.0.22",
     "expo-router": "~55.0.11",

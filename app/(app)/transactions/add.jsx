@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   LayoutAnimation,
   FlatList,
+  Image,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -114,6 +115,7 @@ export default function AddTransactionScreen() {
           itemId: item._id,
           name: item.name,
           unit: item.unit,
+          image: item.image,
           quantity: 1,
           pricePaise: priceData.price,
           priceDisplay: toRupees(priceData.price).toString(),
@@ -128,6 +130,7 @@ export default function AddTransactionScreen() {
           itemId: item._id,
           name: item.name,
           unit: item.unit,
+          image: item.image,
           quantity: 1,
           pricePaise: item.defaultPrice,
           priceDisplay: toRupees(item.defaultPrice).toString(),
@@ -378,8 +381,17 @@ export default function AddTransactionScreen() {
               <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
                 {items.filter(i => i.name.toLowerCase().includes(itemSearch.toLowerCase())).map(item => (
                   <TouchableOpacity key={item._id} style={styles.pickerOption} onPress={() => addLineItem(item)}>
-                    <Text style={styles.optionName}>{item.name}</Text>
-                    <Text style={styles.optionPrice}>{formatCurrency(item.defaultPrice)}</Text>
+                    <View style={styles.pickerIcon}>
+                      {item.image ? (
+                        <Image source={{ uri: item.image }} style={styles.pickerThumbnail} />
+                      ) : (
+                        <Ionicons name="cube" size={16} color={Colors.primary} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.optionName}>{item.name}</Text>
+                      <Text style={styles.optionPrice}>{formatCurrency(item.defaultPrice)} / {item.unit}</Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -392,7 +404,14 @@ export default function AddTransactionScreen() {
           {lineItems.map((li, idx) => (
             <View key={li.itemId} style={styles.lineItem}>
               <View style={styles.lineTop}>
-                <Text style={styles.lineName}>{li.name}</Text>
+                <View style={styles.lineIcon}>
+                  {li.image ? (
+                    <Image source={{ uri: li.image }} style={styles.lineThumbnail} />
+                  ) : (
+                    <Ionicons name="cube" size={18} color={Colors.primary} />
+                  )}
+                </View>
+                <Text style={styles.lineName} numberOfLines={1}>{li.name}</Text>
                 <TouchableOpacity onPress={() => setLineItems(l => l.filter((_, i) => i !== idx))}>
                   <Ionicons name="trash-outline" size={18} color={Colors.danger} />
                 </TouchableOpacity>
@@ -648,13 +667,17 @@ const styles = StyleSheet.create({
   pickerSearch: { backgroundColor: Colors.surfaceLight, padding: 10, borderRadius: 10, color: Colors.text, marginBottom: 10 },
   pickerOption: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   optionName: { color: Colors.text, fontWeight: '600' },
-  optionPrice: { color: Colors.primary, fontWeight: '700' },
+  optionPrice: { color: Colors.primary, fontWeight: '700', fontSize: 12 },
+  pickerIcon: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.surfaceLight, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
+  pickerThumbnail: { width: '100%', height: '100%' },
   pickerClose: { alignItems: 'center', marginTop: 10 },
   pickerCloseText: { color: Colors.danger, fontWeight: '600' },
 
   lineItem: { backgroundColor: Colors.surface, borderRadius: 15, padding: 12, marginTop: 10, borderWidth: 1, borderColor: Colors.border },
-  lineTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  lineName: { color: Colors.text, fontWeight: '700', fontSize: 16 },
+  lineTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
+  lineIcon: { width: 32, height: 32, borderRadius: 6, backgroundColor: Colors.surfaceLight, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  lineThumbnail: { width: '100%', height: '100%' },
+  lineName: { flex: 1, color: Colors.text, fontWeight: '700', fontSize: 16 },
   lineBottom: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceLight, borderRadius: 8, overflow: 'hidden' },
   stepBtn: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },

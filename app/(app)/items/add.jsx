@@ -10,11 +10,14 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { itemsAPI } from '../../../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { itemsAPI, uploadAPI } from '../../../services/api';
 import { toPaise, toRupees } from '../../../utils/currency';
+import { formatCurrency } from '../../../utils/currency';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../constants/theme';
 
 const UNITS = ['kg', 'g', 'litre', 'ml', 'pcs', 'dozen', 'packet', 'box', 'metre', 'other'];
@@ -22,6 +25,24 @@ const UNITS = ['kg', 'g', 'litre', 'ml', 'pcs', 'dozen', 'packet', 'box', 'metre
 export default function AddItemScreen() {
   const [success, setSuccess] = useState(false);
   const [lastItem, setLastItem] = useState(null);
+  const [name, setName] = useState('');
+  const [unit, setUnit] = useState('pcs');
+  const [priceDisplay, setPriceDisplay] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [image, setImage] = useState(null);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -36,10 +57,17 @@ export default function AddItemScreen() {
 
     setLoading(true);
     try {
+      let imageUrl = null;
+      if (image) {
+        const uploadRes = await uploadAPI.image(image);
+        imageUrl = uploadRes.data.url;
+      }
+
       const newItem = {
         name: name.trim(),
         unit,
         defaultPrice: toPaise(priceNum),
+        image: imageUrl,
       };
       await itemsAPI.create(newItem);
       setLastItem(newItem);
@@ -55,6 +83,7 @@ export default function AddItemScreen() {
     setName('');
     setUnit('pcs');
     setPriceDisplay('');
+    setImage(null);
     setSuccess(false);
   };
 
@@ -66,6 +95,13 @@ export default function AddItemScreen() {
         </View>
         <Text style={styles.successTitle}>Item Created!</Text>
         <View style={styles.itemSummary}>
+          {lastItem?.image ? (
+            <Image source={{ uri: lastItem.image }} style={styles.summaryImage} />
+          ) : (
+            <View style={styles.summaryIconPlaceholder}>
+              <Ionicons name="cube" size={40} color={Colors.primary} />
+            </View>
+          )}
           <Text style={styles.summaryName}>{lastItem?.name}</Text>
           <Text style={styles.summaryPrice}>{formatCurrency(lastItem?.defaultPrice)} / {lastItem?.unit}</Text>
         </View>
@@ -98,6 +134,23 @@ export default function AddItemScreen() {
         </View>
 
         <View style={styles.form}>
+          {/* Photo Picker */}
+          <View style={styles.photoContainer}>
+            {image ? (
+              <View style={styles.imageWrapper}>
+                <Image source={{ uri: image }} style={styles.previewImage} />
+                <TouchableOpacity style={styles.removePhoto} onPress={() => setImage(null)}>
+                  <Ionicons name="close-circle" size={24} color={Colors.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.photoPicker} onPress={pickImage}>
+                <Ionicons name="camera-outline" size={32} color={Colors.primary} />
+                <Text style={styles.photoPickerText}>Add Photo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Name */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Item Name *</Text>
@@ -248,4 +301,61 @@ const styles = StyleSheet.create({
   addMoreText: { fontSize: Fonts.sizes.base, fontWeight: '700', color: Colors.primary },
   doneBtn: { backgroundColor: Colors.primary, padding: Spacing.md, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', ...Shadows.button },
   doneBtnText: { fontSize: Fonts.sizes.base, fontWeight: '700', color: Colors.white },
+  
+  // Photo Picker Styles
+  photoContainer: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  photoPicker: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  photoPickerText: {
+    fontSize: Fonts.sizes.xs,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  imageWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    position: 'relative',
+    ...Shadows.card,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  removePhoto: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+  },
+  summaryImage: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.md,
+  },
+  summaryIconPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryGhost,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
 });

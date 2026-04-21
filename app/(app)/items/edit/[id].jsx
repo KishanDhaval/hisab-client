@@ -10,10 +10,12 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { itemsAPI } from '../../../../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { itemsAPI, uploadAPI } from '../../../../services/api';
 import { toPaise, toRupees } from '../../../../utils/currency';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../../constants/theme';
 
@@ -26,6 +28,22 @@ export default function EditItemScreen() {
   const [priceDisplay, setPriceDisplay] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [image, setImage] = useState(null);
+  const [isNewImage, setIsNewImage] = useState(false);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+      setIsNewImage(true);
+    }
+  };
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -35,6 +53,7 @@ export default function EditItemScreen() {
         setName(item.name);
         setUnit(item.unit);
         setPriceDisplay(toRupees(item.defaultPrice).toString());
+        setImage(item.image);
       } catch (error) {
         Alert.alert('Error', 'Failed to load item details.');
         router.back();
@@ -58,10 +77,19 @@ export default function EditItemScreen() {
 
     setLoading(true);
     try {
+      let imageUrl = image;
+      
+      // If a new image was picked, upload it first
+      if (image && isNewImage) {
+        const uploadRes = await uploadAPI.image(image);
+        imageUrl = uploadRes.data.url;
+      }
+
       await itemsAPI.update(id, {
         name: name.trim(),
         unit,
         defaultPrice: toPaise(priceNum),
+        image: imageUrl,
       });
       Alert.alert('Success', 'Item updated successfully.');
       router.back();
@@ -123,6 +151,29 @@ export default function EditItemScreen() {
         </View>
 
         <View style={styles.form}>
+          {/* Photo Picker */}
+          <View style={styles.photoContainer}>
+            {image ? (
+              <View style={styles.imageWrapper}>
+                <Image source={{ uri: image }} style={styles.previewImage} />
+                <TouchableOpacity 
+                  style={styles.removePhoto} 
+                  onPress={() => {
+                    setImage(null);
+                    setIsNewImage(false);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={24} color={Colors.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.photoPicker} onPress={pickImage}>
+                <Ionicons name="camera-outline" size={32} color={Colors.primary} />
+                <Text style={styles.photoPickerText}>Add Photo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Name */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Item Name *</Text>
@@ -261,4 +312,46 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: Colors.white, fontSize: Fonts.sizes.lg, fontWeight: '700' },
+  
+  // Photo Picker Styles
+  photoContainer: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  photoPicker: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  photoPickerText: {
+    fontSize: Fonts.sizes.xs,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  imageWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    position: 'relative',
+    ...Shadows.card,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  removePhoto: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+  },
 });

@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -62,7 +63,11 @@ export default function ItemsListScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.itemIcon}>
-        <Ionicons name="cube" size={22} color={Colors.primary} />
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.itemThumbnail} />
+        ) : (
+          <Ionicons name="cube" size={22} color={Colors.primary} />
+        )}
       </View>
       <View style={styles.itemInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
@@ -199,6 +204,11 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, marginLeft: Spacing.md },
   itemName: { fontSize: Fonts.sizes.base, fontWeight: '600', color: Colors.text },
   itemUnit: { fontSize: Fonts.sizes.sm, color: Colors.textMuted, marginTop: 2 },
+  itemThumbnail: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.md,
+  },
   itemPrice: { fontSize: Fonts.sizes.base, fontWeight: '700', color: Colors.primary },
   empty: { alignItems: 'center', marginTop: Spacing.xxxl * 2 },
   emptyText: { fontSize: Fonts.sizes.lg, fontWeight: '600', color: Colors.textSecondary, marginTop: Spacing.md },
