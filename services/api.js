@@ -11,7 +11,7 @@ import Constants from 'expo-constants';
  *  - Mobile (Prod):    Production URL
  */
 const getBaseUrl = () => {
-  if (!__DEV__) return 'https://your-production-api.com/api';
+  if (!__DEV__) return 'https://hisab-server-xn0w.onrender.com/api';
 
   if (Platform.OS === 'web') return 'http://localhost:5000/api';
 

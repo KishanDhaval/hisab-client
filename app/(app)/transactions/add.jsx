@@ -12,12 +12,13 @@ import {
   ActivityIndicator,
   LayoutAnimation,
   FlatList,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { customersAPI, itemsAPI, transactionsAPI } from '../../../services/api';
+import { imageManager } from '../../../utils/imageManager';
 import { toPaise, toRupees, safeMultiply, formatCurrency } from '../../../utils/currency';
 import { syncService } from '../../../services/sync';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../constants/theme';
@@ -57,6 +58,11 @@ export default function AddTransactionScreen() {
         ]);
         setCustomers(custRes.data.customers);
         setItems(itemRes.data.items);
+        
+        // Background sync images for transaction picker
+        itemRes.data.items.forEach(item => {
+          if (item.image) imageManager.getLocalUri(item.image);
+        });
 
         // Pre-select customer if ID provided in params
         if (params.customerId) {

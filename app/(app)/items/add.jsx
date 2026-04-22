@@ -10,12 +10,13 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { itemsAPI, uploadAPI } from '../../../services/api';
+import { imageManager } from '../../../utils/imageManager';
 import { toPaise, toRupees } from '../../../utils/currency';
 import { formatCurrency } from '../../../utils/currency';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../constants/theme';
@@ -33,14 +34,17 @@ export default function AddItemScreen() {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
 
     if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      const pickedUri = result.assets[0].uri;
+      // Save permanently to local storage for quick offline access
+      const localUri = await imageManager.savePickedImage(pickedUri);
+      setImage(localUri);
     }
   };
 

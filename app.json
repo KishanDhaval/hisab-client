@@ -24,7 +24,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A1A2E"
       },
-      "package": "com.hisab.ledger"
+      "package": "com.hisab.ledger",
+      "permissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -34,11 +38,15 @@
       "expo-router",
       "expo-secure-store",
       "expo-contacts",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-image"
     ],
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "b0bc3ac8-8b2d-4d1c-bc26-d7f09ff5d750"
       }
     }
   }

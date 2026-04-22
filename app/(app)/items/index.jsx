@@ -8,11 +8,12 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { itemsAPI } from '../../../services/api';
+import { imageManager } from '../../../utils/imageManager';
 import { formatCurrency } from '../../../utils/currency';
 import { Colors, Fonts, Spacing, Radius, Shadows } from '../../../constants/theme';
 
@@ -40,6 +41,11 @@ export default function ItemsListScreen() {
       if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       const { data } = await itemsAPI.list(params);
       setItems(data.items);
+      
+      // Background sync images to local storage for offline use
+      data.items.forEach(item => {
+        if (item.image) imageManager.getLocalUri(item.image);
+      });
     } catch (err) {
       console.error('Fetch items error:', err);
       setError('Failed to load items. Tap to retry.');
